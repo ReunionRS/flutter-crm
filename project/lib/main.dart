@@ -129,12 +129,101 @@ class ProjectSummary {
   }
 }
 
+class ProjectStage {
+  ProjectStage({
+    required this.id,
+    required this.name,
+    required this.status,
+    required this.startDate,
+    required this.endDate,
+    required this.stageComment,
+  });
+
+  final String id;
+  final String name;
+  final String status;
+  final String startDate;
+  final String endDate;
+  final String stageComment;
+
+  static ProjectStage fromJson(Map<String, dynamic> json, int index) {
+    return ProjectStage(
+      id: (json['id'] ?? 'stage-$index').toString(),
+      name: (json['name'] ?? 'Этап ${index + 1}').toString(),
+      status: (json['status'] ?? 'Не начат').toString(),
+      startDate: (json['startDate'] ?? '').toString(),
+      endDate: (json['endDate'] ?? '').toString(),
+      stageComment: (json['stageComment'] ?? '').toString(),
+    );
+  }
+}
+
+class ProjectDetails {
+  ProjectDetails({
+    required this.id,
+    required this.clientFio,
+    required this.clientPhone,
+    required this.clientEmail,
+    required this.constructionAddress,
+    required this.projectType,
+    required this.status,
+    required this.startDate,
+    required this.plannedEndDate,
+    required this.estimatedCost,
+    required this.stages,
+  });
+
+  final String id;
+  final String clientFio;
+  final String clientPhone;
+  final String clientEmail;
+  final String constructionAddress;
+  final String projectType;
+  final String status;
+  final String startDate;
+  final String plannedEndDate;
+  final num estimatedCost;
+  final List<ProjectStage> stages;
+
+  static ProjectDetails fromJson(Map<String, dynamic> json) {
+    final rawStages = (json['stages'] as List<dynamic>? ?? const <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .toList(growable: false);
+
+    return ProjectDetails(
+      id: (json['id'] ?? '').toString(),
+      clientFio: (json['clientFio'] ?? '').toString(),
+      clientPhone: (json['clientPhone'] ?? '').toString(),
+      clientEmail: (json['clientEmail'] ?? '').toString(),
+      constructionAddress: (json['constructionAddress'] ?? '').toString(),
+      projectType: (json['projectType'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      startDate: (json['startDate'] ?? '').toString(),
+      plannedEndDate: (json['plannedEndDate'] ?? '').toString(),
+      estimatedCost: (json['estimatedCost'] as num?) ?? 0,
+      stages: List.generate(
+        rawStages.length,
+        (i) => ProjectStage.fromJson(rawStages[i], i),
+      ),
+    );
+  }
+}
+
 class AuthService {
   static const _tokenKey = 'auth_token';
   static const _rememberEmailKey = 'remember_email';
   static const _userEmailKey = 'user_email';
   static const _userFioKey = 'user_fio';
   static const _userRoleKey = 'user_role';
+
+  Future<Map<String, String>> _authHeaders() async {
+    final session = await getSession();
+    if (session == null) throw const UnauthorizedException();
+    return <String, String>{
+      'Authorization': 'Bearer ${session.token}',
+      'Content-Type': 'application/json',
+    };
+  }
 
   Future<AppSession?> getSession() async {
     final prefs = await SharedPreferences.getInstance();
@@ -228,17 +317,11 @@ class AuthService {
   }
 
   Future<List<ProjectSummary>> fetchProjects() async {
-    final session = await getSession();
-    if (session == null) {
-      throw const UnauthorizedException();
-    }
-
     final uri = Uri.parse('${ApiConfig.baseUrl}/api/projects');
+    final headers = await _authHeaders();
     final response = await http.get(
       uri,
-      headers: {
-        'Authorization': 'Bearer ${session.token}',
-      },
+      headers: headers,
     );
 
     if (response.statusCode == 401) {
@@ -260,6 +343,57 @@ class AuthService {
         .whereType<Map<String, dynamic>>()
         .map(ProjectSummary.fromJson)
         .toList(growable: false);
+  }
+
+  Future<ProjectDetails> fetchProjectById(String projectId) async {
+    final headers = await _authHeaders();
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/projects/$projectId'),
+      headers: headers,
+    );
+
+    if (response.statusCode == 401) throw const UnauthorizedException();
+    if (response.statusCode != 200) throw Exception('Не удалось загрузить объект');
+
+    return ProjectDetails.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> createProject(Map<String, dynamic> payload) async {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/projects'),
+      headers: headers,
+      body: jsonEncode(payload),
+    );
+    if (response.statusCode == 401) throw const UnauthorizedException();
+    if (response.statusCode != 201) {
+      throw Exception('Не удалось создать объект');
+    }
+  }
+
+  Future<void> updateProject(String projectId, Map<String, dynamic> payload) async {
+    final headers = await _authHeaders();
+    final response = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/api/projects/$projectId'),
+      headers: headers,
+      body: jsonEncode(payload),
+    );
+    if (response.statusCode == 401) throw const UnauthorizedException();
+    if (response.statusCode != 200) {
+      throw Exception('Не удалось обновить объект');
+    }
+  }
+
+  Future<void> deleteProject(String projectId) async {
+    final headers = await _authHeaders();
+    final response = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}/api/projects/$projectId'),
+      headers: headers,
+    );
+    if (response.statusCode == 401) throw const UnauthorizedException();
+    if (response.statusCode != 200) {
+      throw Exception('Не удалось удалить объект');
+    }
   }
 }
 
@@ -597,6 +731,7 @@ class _HomeScreenState extends State<HomeScreen> {
   AppSection _section = AppSection.projects;
 
   bool get _canSeeUsers => widget.session.role == 'admin' || widget.session.role == 'director';
+  bool get _canManageProjects => widget.session.role != 'client';
 
   @override
   void initState() {
@@ -629,6 +764,82 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() => _loading = false);
       }
+    }
+  }
+
+  Future<void> _openProject(ProjectSummary project) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectDetailsPage(
+          auth: widget.auth,
+          projectId: project.id,
+          canManage: _canManageProjects,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _loadProjects();
+    }
+  }
+
+  Future<void> _deleteProject(ProjectSummary project) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить объект?'),
+        content: Text('${project.clientFio}\n${project.constructionAddress}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await widget.auth.deleteProject(project.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Объект удалён')));
+      await _loadProjects();
+    } on UnauthorizedException {
+      await widget.onLogout();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
+  Future<void> _openProjectForm({ProjectSummary? existing}) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => _ProjectFormDialog(existing: existing),
+    );
+    if (result == null) return;
+
+    try {
+      if (existing == null) {
+        await widget.auth.createProject(result);
+      } else {
+        await widget.auth.updateProject(existing.id, result);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(existing == null ? 'Объект создан' : 'Объект обновлён')),
+      );
+      await _loadProjects();
+    } on UnauthorizedException {
+      await widget.onLogout();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     }
   }
 
@@ -693,7 +904,14 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: EdgeInsets.all(20),
               child: Center(child: Text('Объекты не найдены')),
             ),
-          for (final project in filtered) _ProjectCard(project: project),
+          for (final project in filtered)
+            _ProjectCard(
+              project: project,
+              canManage: _canManageProjects,
+              onOpen: () => _openProject(project),
+              onEdit: () => _openProjectForm(existing: project),
+              onDelete: () => _deleteProject(project),
+            ),
         ],
       ),
     );
@@ -752,6 +970,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             )
           : _buildBody(),
+      floatingActionButton: _section == AppSection.projects && _canManageProjects
+          ? FloatingActionButton.extended(
+              onPressed: () => _openProjectForm(),
+              backgroundColor: const Color(0xFFE0B300),
+              label: const Text('Добавить объект'),
+              icon: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 }
@@ -799,6 +1025,13 @@ class AppSidebar extends StatelessWidget {
                       width: 48,
                       height: 48,
                       fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 48,
+                        height: 48,
+                        color: Colors.transparent,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.home_work_outlined, color: Color(0xFFE0B300)),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -892,42 +1125,291 @@ class AppSidebar extends StatelessWidget {
 }
 
 class _ProjectCard extends StatelessWidget {
-  const _ProjectCard({required this.project});
+  const _ProjectCard({
+    required this.project,
+    required this.canManage,
+    required this.onOpen,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final ProjectSummary project;
+  final bool canManage;
+  final VoidCallback onOpen;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              project.clientFio,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(project.constructionAddress),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                _Meta(label: 'Статус', value: project.status),
-                _Meta(label: 'Начало', value: _fmtDate(project.startDate)),
-                _Meta(label: 'План сдачи', value: _fmtDate(project.plannedEndDate)),
-                _Meta(label: 'Готовность', value: '${project.progress}%'),
-              ],
-            ),
-          ],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      project.clientFio,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (canManage)
+                    IconButton(
+                      tooltip: 'Редактировать',
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, color: Color(0xFFE0B300)),
+                    ),
+                  if (canManage)
+                    IconButton(
+                      tooltip: 'Удалить',
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(project.constructionAddress),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  _Meta(label: 'Статус', value: project.status),
+                  _Meta(label: 'Начало', value: _fmtDate(project.startDate)),
+                  _Meta(label: 'План сдачи', value: _fmtDate(project.plannedEndDate)),
+                  _Meta(label: 'Готовность', value: '${project.progress}%'),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _ProjectFormDialog extends StatefulWidget {
+  const _ProjectFormDialog({this.existing});
+
+  final ProjectSummary? existing;
+
+  @override
+  State<_ProjectFormDialog> createState() => _ProjectFormDialogState();
+}
+
+class _ProjectFormDialogState extends State<_ProjectFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _fio;
+  late final TextEditingController _address;
+  late final TextEditingController _phone;
+  late final TextEditingController _email;
+  late final TextEditingController _estimatedCost;
+  late final TextEditingController _startDate;
+  late final TextEditingController _plannedEndDate;
+  late final TextEditingController _status;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    _fio = TextEditingController(text: existing?.clientFio ?? '');
+    _address = TextEditingController(text: existing?.constructionAddress ?? '');
+    _phone = TextEditingController();
+    _email = TextEditingController();
+    _estimatedCost = TextEditingController();
+    _startDate = TextEditingController(text: existing?.startDate ?? '');
+    _plannedEndDate = TextEditingController(text: existing?.plannedEndDate ?? '');
+    _status = TextEditingController(text: existing?.status ?? 'in_progress');
+  }
+
+  @override
+  void dispose() {
+    _fio.dispose();
+    _address.dispose();
+    _phone.dispose();
+    _email.dispose();
+    _estimatedCost.dispose();
+    _startDate.dispose();
+    _plannedEndDate.dispose();
+    _status.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.existing == null ? 'Новый объект' : 'Редактирование объекта'),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _fio,
+                  decoration: const InputDecoration(labelText: 'ФИО клиента'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Введите ФИО' : null,
+                ),
+                TextFormField(
+                  controller: _address,
+                  decoration: const InputDecoration(labelText: 'Адрес объекта'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Введите адрес' : null,
+                ),
+                TextFormField(controller: _phone, decoration: const InputDecoration(labelText: 'Телефон')),
+                TextFormField(controller: _email, decoration: const InputDecoration(labelText: 'Email')),
+                TextFormField(controller: _estimatedCost, decoration: const InputDecoration(labelText: 'Сметная стоимость')),
+                TextFormField(controller: _startDate, decoration: const InputDecoration(labelText: 'Дата начала (yyyy-mm-dd)')),
+                TextFormField(controller: _plannedEndDate, decoration: const InputDecoration(labelText: 'План сдачи (yyyy-mm-dd)')),
+                TextFormField(controller: _status, decoration: const InputDecoration(labelText: 'Статус')),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        FilledButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.pop(context, <String, dynamic>{
+              'clientFio': _fio.text.trim(),
+              'constructionAddress': _address.text.trim(),
+              'clientPhone': _phone.text.trim(),
+              'clientEmail': _email.text.trim(),
+              'estimatedCost': num.tryParse(_estimatedCost.text.trim()) ?? 0,
+              'startDate': _startDate.text.trim(),
+              'plannedEndDate': _plannedEndDate.text.trim(),
+              'status': _status.text.trim().isEmpty ? 'in_progress' : _status.text.trim(),
+              'projectType': 'typical',
+            });
+          },
+          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE0B300)),
+          child: const Text('Сохранить'),
+        ),
+      ],
+    );
+  }
+}
+
+class ProjectDetailsPage extends StatefulWidget {
+  const ProjectDetailsPage({
+    super.key,
+    required this.auth,
+    required this.projectId,
+    required this.canManage,
+  });
+
+  final AuthService auth;
+  final String projectId;
+  final bool canManage;
+
+  @override
+  State<ProjectDetailsPage> createState() => _ProjectDetailsPageState();
+}
+
+class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
+  ProjectDetails? _details;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final details = await widget.auth.fetchProjectById(widget.projectId);
+      if (!mounted) return;
+      setState(() => _details = details);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Карточка объекта')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(child: Text(_error!))
+              : _details == null
+                  ? const Center(child: Text('Объект не найден'))
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _details!.clientFio,
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _Meta(label: 'Адрес', value: _details!.constructionAddress),
+                                  _Meta(label: 'Телефон', value: _details!.clientPhone.isEmpty ? '—' : _details!.clientPhone),
+                                  _Meta(label: 'Email', value: _details!.clientEmail.isEmpty ? '—' : _details!.clientEmail),
+                                  _Meta(label: 'Тип', value: _details!.projectType.isEmpty ? '—' : _details!.projectType),
+                                  _Meta(label: 'Статус', value: _details!.status),
+                                  _Meta(label: 'Дата начала', value: _fmtDate(_details!.startDate)),
+                                  _Meta(label: 'План сдачи', value: _fmtDate(_details!.plannedEndDate)),
+                                  _Meta(label: 'Сметная стоимость', value: '${_details!.estimatedCost} ₽'),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text('Этапы строительства', style: Theme.of(context).textTheme.titleLarge),
+                          const SizedBox(height: 8),
+                          if (_details!.stages.isEmpty)
+                            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Этапы пока не добавлены'))),
+                          for (final stage in _details!.stages)
+                            Card(
+                              child: ListTile(
+                                title: Text(stage.name),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Статус: ${stage.status}'),
+                                    Text('План: ${_fmtDate(stage.startDate)} - ${_fmtDate(stage.endDate)}'),
+                                    if (stage.stageComment.trim().isNotEmpty)
+                                      Text(
+                                        'Комментарий: ${stage.stageComment}',
+                                        style: const TextStyle(color: Colors.redAccent),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
     );
   }
 }
