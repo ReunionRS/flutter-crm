@@ -72,6 +72,28 @@ class _UsersPageState extends State<UsersPage> {
       return;
     }
 
+    final sendWelcomeEmail = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отправка данных'),
+        content: const Text(
+          'Продублировать данные пользователя на почту?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Нет'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Да'),
+          ),
+        ],
+      ),
+    );
+
+    if (sendWelcomeEmail == null) return;
+
     setState(() => _creating = true);
     try {
       await widget.auth.createUser(
@@ -79,6 +101,7 @@ class _UsersPageState extends State<UsersPage> {
         email: email,
         password: password,
         role: _newRole,
+        sendWelcomeEmail: sendWelcomeEmail,
       );
       if (!mounted) return;
       _fioController.clear();

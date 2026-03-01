@@ -488,6 +488,7 @@ class AuthService {
     required String email,
     required String password,
     required String role,
+    bool sendWelcomeEmail = true,
   }) async {
     final headers = await _authHeaders();
     final response = await http.post(
@@ -498,6 +499,7 @@ class AuthService {
         'email': email,
         'password': password,
         'role': role,
+        'sendWelcomeEmail': sendWelcomeEmail,
       }),
     );
 
