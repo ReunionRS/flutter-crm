@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/api_config.dart';
 import '../../models/session_models.dart';
 import '../../services/auth_service.dart';
 
@@ -121,7 +120,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     CheckboxListTile(
                       value: _rememberEmail,
-                      onChanged: (v) => setState(() => _rememberEmail = v ?? false),
+                      onChanged: (v) =>
+                          setState(() => _rememberEmail = v ?? false),
                       title: const Text('Запомнить данные для входа'),
                       contentPadding: EdgeInsets.zero,
                       controlAffinity: ListTileControlAffinity.leading,
@@ -140,12 +140,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text('Войти'),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'API: ${ApiConfig.baseUrl}',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                   ],
                 ),
