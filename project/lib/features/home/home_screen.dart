@@ -237,21 +237,8 @@ class _HomeScreenState extends State<HomeScreen> {
       AppSection.support => 'Поддержка',
       AppSection.notifications => 'Уведомления',
       AppSection.calendar => 'Календарь',
-      AppSection.reports => 'Отчёты',
       AppSection.users => 'Пользователи',
     };
-  }
-
-  Widget _placeholder(String title) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          '$title\n(экран переносим следующим шагом)',
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
   }
 
   Widget _buildProjectsContent() {
@@ -324,7 +311,6 @@ class _HomeScreenState extends State<HomeScreen> {
           auth: widget.auth,
           role: widget.session.role,
           onUnauthorized: widget.onLogout),
-      AppSection.reports => _placeholder('Отчёты'),
       AppSection.users => UsersPage(
           auth: widget.auth,
           role: widget.session.role,

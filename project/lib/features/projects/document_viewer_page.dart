@@ -23,6 +23,10 @@ class DocumentViewerPage extends StatefulWidget {
 class _DocumentViewerPageState extends State<DocumentViewerPage> {
   late final String _viewType;
 
+  String get _previewUrl => widget.isDocx
+      ? 'https://view.officeapps.live.com/op/embed.aspx?src=${Uri.encodeComponent(widget.fileUrl)}'
+      : widget.fileUrl;
+
   @override
   void initState() {
     super.initState();
@@ -30,7 +34,7 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
   }
 
   Future<void> _openExternal() async {
-    final uri = Uri.parse(widget.fileUrl);
+    final uri = Uri.parse(_previewUrl);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -41,10 +45,6 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final previewUrl = widget.isDocx
-        ? 'https://view.officeapps.live.com/op/embed.aspx?src=${Uri.encodeComponent(widget.fileUrl)}'
-        : widget.fileUrl;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
@@ -59,13 +59,15 @@ class _DocumentViewerPageState extends State<DocumentViewerPage> {
       body: kIsWeb
           ? buildDocumentPreviewFrame(
               viewType: _viewType,
-              url: previewUrl,
+              url: _previewUrl,
             )
           : Center(
               child: FilledButton.icon(
                 onPressed: _openExternal,
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('Открыть документ'),
+                label: Text(widget.isDocx
+                    ? 'Открыть предпросмотр Word'
+                    : 'Открыть документ'),
               ),
             ),
     );

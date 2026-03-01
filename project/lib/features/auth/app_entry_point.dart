@@ -4,6 +4,7 @@ import '../../models/session_models.dart';
 import '../../services/auth_service.dart';
 import '../home/home_screen.dart';
 import 'login_screen.dart';
+import 'startup_splash.dart';
 
 class AppEntryPoint extends StatefulWidget {
   const AppEntryPoint({
@@ -48,7 +49,7 @@ class _AppEntryPointState extends State<AppEntryPoint> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const StartupSplash();
     }
 
     if (_session != null) {

@@ -6,7 +6,6 @@ enum AppSection {
   support,
   notifications,
   calendar,
-  reports,
   users,
 }
 
@@ -54,13 +53,6 @@ const menuItems = <MenuItemData>[
     group: 'Планирование',
     label: 'Календарь',
     icon: Icons.calendar_month_outlined,
-    visibleForClient: false,
-  ),
-  MenuItemData(
-    section: AppSection.reports,
-    group: 'Планирование',
-    label: 'Отчёты',
-    icon: Icons.bar_chart_outlined,
     visibleForClient: false,
   ),
   MenuItemData(

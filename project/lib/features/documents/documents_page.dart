@@ -269,7 +269,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text('Документооборот',
                       style: Theme.of(context)
@@ -390,6 +390,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
                   else
                     ..._docs.map((doc) {
                       return Container(
+                        width: double.infinity,
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
