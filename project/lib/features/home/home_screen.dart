@@ -6,6 +6,11 @@ import '../../models/session_models.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/app_sidebar.dart';
 import '../../widgets/project_card.dart';
+import '../calendar/calendar_page.dart';
+import '../documents/documents_page.dart';
+import '../notifications/notifications_page.dart';
+import '../support/support_page.dart';
+import '../users/users_page.dart';
 import '../projects/project_details_page.dart';
 import '../projects/project_form_dialog.dart';
 
@@ -33,18 +38,22 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   List<ProjectSummary> _projects = const [];
   List<ClientOption> _clients = const [];
+  String? _supportInitialClientId;
   bool _loading = true;
   String? _error;
   AppSection _section = AppSection.projects;
 
-  bool get _canSeeUsers => widget.session.role == 'admin' || widget.session.role == 'director';
+  bool get _canSeeUsers =>
+      widget.session.role == 'admin' || widget.session.role == 'director';
   bool get _canManageProjects =>
       widget.session.role == 'admin' ||
       widget.session.role == 'director' ||
       widget.session.role == 'manager' ||
       widget.session.role == 'foreman';
   bool get _canDeleteProjects =>
-      widget.session.role == 'admin' || widget.session.role == 'director' || widget.session.role == 'manager';
+      widget.session.role == 'admin' ||
+      widget.session.role == 'director' ||
+      widget.session.role == 'manager';
 
   @override
   void initState() {
@@ -112,6 +121,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _openProjectFromNotification(String projectId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectDetailsPage(
+          auth: widget.auth,
+          projectId: projectId,
+          role: widget.session.role,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _loadProjects();
+    }
+  }
+
+  void _openSupportFromNotification(String? clientUserId) {
+    setState(() {
+      _supportInitialClientId = clientUserId;
+      _section = AppSection.support;
+    });
+  }
+
   Future<void> _deleteProject(ProjectSummary project) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -119,7 +150,9 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Удалить объект?'),
         content: Text('${project.clientFio}\n${project.constructionAddress}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
@@ -133,7 +166,8 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await widget.auth.deleteProject(project.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Объект удалён')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Объект удалён')));
       await _loadProjects();
     } on UnauthorizedException {
       await widget.onLogout();
@@ -171,7 +205,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(existing == null ? 'Объект создан' : 'Объект обновлён')),
+        SnackBar(
+            content:
+                Text(existing == null ? 'Объект создан' : 'Объект обновлён')),
       );
       await _loadProjects();
     } on UnauthorizedException {
@@ -181,6 +217,16 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
+    }
+  }
+
+  void _selectSection(AppSection section, bool isDesktop) {
+    if (section == AppSection.users && !_canSeeUsers) return;
+    setState(() => _section = section);
+
+    // On mobile close drawer after selection.
+    if (!isDesktop && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 
@@ -212,7 +258,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final query = _searchController.text.trim().toLowerCase();
     final filtered = _projects.where((p) {
       if (query.isEmpty) return true;
-      return p.clientFio.toLowerCase().contains(query) || p.constructionAddress.toLowerCase().contains(query);
+      return p.clientFio.toLowerCase().contains(query) ||
+          p.constructionAddress.toLowerCase().contains(query);
     }).toList(growable: false);
 
     return RefreshIndicator(
@@ -237,7 +284,8 @@ class _HomeScreenState extends State<HomeScreen> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+              child: Text(_error!,
+                  style: const TextStyle(color: Colors.redAccent)),
             ),
           if (!_loading && _error == null && filtered.isEmpty)
             const Padding(
@@ -261,12 +309,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBody() {
     return switch (_section) {
       AppSection.projects => _buildProjectsContent(),
-      AppSection.documents => _placeholder('Документы'),
-      AppSection.support => _placeholder('Поддержка'),
-      AppSection.notifications => _placeholder('Уведомления'),
-      AppSection.calendar => _placeholder('Календарь'),
+      AppSection.documents =>
+        DocumentsPage(auth: widget.auth, role: widget.session.role),
+      AppSection.support => SupportPage(
+          auth: widget.auth,
+          session: widget.session,
+          onUnauthorized: widget.onLogout,
+          initialClientUserId: _supportInitialClientId),
+      AppSection.notifications => NotificationsPage(
+          auth: widget.auth,
+          onOpenSupportChat: _openSupportFromNotification,
+          onOpenProject: _openProjectFromNotification),
+      AppSection.calendar => CalendarPage(
+          auth: widget.auth,
+          role: widget.session.role,
+          onUnauthorized: widget.onLogout),
       AppSection.reports => _placeholder('Отчёты'),
-      AppSection.users => _placeholder('Пользователи'),
+      AppSection.users => UsersPage(
+          auth: widget.auth,
+          role: widget.session.role,
+          onUnauthorized: widget.onLogout),
     };
   }
 
@@ -278,10 +340,7 @@ class _HomeScreenState extends State<HomeScreen> {
       role: widget.session.role,
       isDarkMode: widget.isDarkMode,
       selectedSection: _section,
-      onSelect: (section) {
-        if (section == AppSection.users && !_canSeeUsers) return;
-        setState(() => _section = section);
-      },
+      onSelect: (section) => _selectSection(section, isDesktop),
       onToggleTheme: widget.onToggleTheme,
     );
 
@@ -301,23 +360,29 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 320,
               child: sidebar,
             ),
-      body: isDesktop
-          ? Row(
-              children: [
-                SizedBox(width: 320, child: sidebar),
-                const VerticalDivider(width: 1),
-                Expanded(child: _buildBody()),
-              ],
-            )
-          : _buildBody(),
-      floatingActionButton: _section == AppSection.projects && _canManageProjects
-          ? FloatingActionButton.extended(
-              onPressed: () => _openProjectForm(),
-              backgroundColor: const Color(0xFFE0B300),
-              label: const Text('Добавить объект'),
-              icon: const Icon(Icons.add),
-            )
-          : null,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1520),
+          child: isDesktop
+              ? Row(
+                  children: [
+                    SizedBox(width: 320, child: sidebar),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: _buildBody()),
+                  ],
+                )
+              : _buildBody(),
+        ),
+      ),
+      floatingActionButton:
+          _section == AppSection.projects && _canManageProjects
+              ? FloatingActionButton.extended(
+                  onPressed: () => _openProjectForm(),
+                  backgroundColor: const Color(0xFFE0B300),
+                  label: const Text('Добавить объект'),
+                  icon: const Icon(Icons.add),
+                )
+              : null,
     );
   }
 }

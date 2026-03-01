@@ -36,22 +36,22 @@ class AppSidebar extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
               child: Row(
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     child: Image.asset(
                       'assets/logo.png',
-                      width: 48,
-                      height: 48,
+                      width: 50,
+                      height: 50,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
-                        width: 48,
-                        height: 48,
+                        width: 50,
+                        height: 50,
                         color: Colors.transparent,
                         alignment: Alignment.center,
-                        child: const Icon(Icons.home_work_outlined, color: Color(0xFFE0B300)),
+                        child: const Icon(Icons.home_work_outlined, color: Color(0xFFE0B300), size: 28),
                       ),
                     ),
                   ),
@@ -60,10 +60,10 @@ class AppSidebar extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Март Строй', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
+                        const Text('Март Строй', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w700)),
                         Text(
                           kRoleLabels[role] ?? role,
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65)),
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.68)),
                         ),
                       ],
                     ),
@@ -74,17 +74,17 @@ class AppSidebar extends StatelessWidget {
             const Divider(height: 1),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.only(top: 6, bottom: 8),
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
                 children: groups.entries.expand((entry) {
                   final widgets = <Widget>[
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: Text(
                         entry.key,
                         style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.62),
                           fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -93,16 +93,26 @@ class AppSidebar extends StatelessWidget {
                     final disabled = item.adminOnly && !_canSeeUsers;
                     final selected = selectedSection == item.section;
                     widgets.add(
-                      ListTile(
-                        dense: true,
-                        selected: selected,
-                        enabled: !disabled,
-                        leading: Icon(item.icon, color: const Color(0xFFE0B300)),
-                        title: Text(
-                          disabled ? '${item.label} (нет доступа)' : item.label,
-                          style: TextStyle(fontWeight: selected ? FontWeight.w700 : FontWeight.w500),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        child: ListTile(
+                          minVerticalPadding: 10,
+                          minLeadingWidth: 30,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          selected: selected,
+                          selectedTileColor: const Color(0xFFE0B300).withOpacity(0.12),
+                          enabled: !disabled,
+                          leading: Icon(item.icon, color: const Color(0xFFE0B300), size: 24),
+                          title: Text(
+                            disabled ? '${item.label} (нет доступа)' : item.label,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                          onTap: disabled ? null : () => onSelect(item.section),
                         ),
-                        onTap: disabled ? null : () => onSelect(item.section),
                       ),
                     );
                   }
@@ -122,6 +132,7 @@ class AppSidebar extends StatelessWidget {
                 icon: Icon(isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
                 label: Text(isDarkMode ? 'Светлая тема' : 'Тёмная тема'),
                 style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
                   backgroundColor: const Color(0xFFE0B300),
                   foregroundColor: Colors.white,
                 ),

@@ -29,10 +29,26 @@ class MenuItemData {
 }
 
 const menuItems = <MenuItemData>[
-  MenuItemData(section: AppSection.projects, group: 'Объекты строительства', label: 'Объекты', icon: Icons.home_outlined),
-  MenuItemData(section: AppSection.documents, group: 'Документооборот', label: 'Документы', icon: Icons.description_outlined),
-  MenuItemData(section: AppSection.support, group: 'Поддержка', label: 'Чат поддержки', icon: Icons.chat_bubble_outline),
-  MenuItemData(section: AppSection.notifications, group: 'Уведомления', label: 'Уведомления', icon: Icons.notifications_none),
+  MenuItemData(
+      section: AppSection.projects,
+      group: 'Объекты строительства',
+      label: 'Объекты',
+      icon: Icons.home_outlined),
+  MenuItemData(
+      section: AppSection.documents,
+      group: 'Документооборот',
+      label: 'Документы',
+      icon: Icons.folder_open_outlined),
+  MenuItemData(
+      section: AppSection.support,
+      group: 'Поддержка',
+      label: 'Чат поддержки',
+      icon: Icons.chat_bubble_outline),
+  MenuItemData(
+      section: AppSection.notifications,
+      group: 'Уведомления',
+      label: 'Уведомления',
+      icon: Icons.notifications_none),
   MenuItemData(
     section: AppSection.calendar,
     group: 'Планирование',

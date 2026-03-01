@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants.dart';
+import '../../core/formatters.dart';
 import '../../models/project_models.dart';
 import '../../models/session_models.dart';
 
@@ -36,7 +37,6 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
   late final TextEditingController _paidAmount;
   late final TextEditingController _startDate;
   late final TextEditingController _plannedEndDate;
-  late final TextEditingController _actualEndDate;
   late final TextEditingController _nextPaymentDate;
   late final TextEditingController _lastPaymentDate;
   late final TextEditingController _cameraUrl;
@@ -57,11 +57,10 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
     _estimatedCost = TextEditingController(text: existing == null ? '0' : existing.estimatedCost.toString());
     _contractAmount = TextEditingController(text: existing == null ? '0' : existing.contractAmount.toString());
     _paidAmount = TextEditingController(text: existing == null ? '0' : existing.paidAmount.toString());
-    _startDate = TextEditingController(text: existing?.startDate ?? '');
-    _plannedEndDate = TextEditingController(text: existing?.plannedEndDate ?? '');
-    _actualEndDate = TextEditingController(text: existing?.actualEndDate ?? '');
-    _nextPaymentDate = TextEditingController(text: existing?.nextPaymentDate ?? '');
-    _lastPaymentDate = TextEditingController(text: existing?.lastPaymentDate ?? '');
+    _startDate = TextEditingController(text: formatDateRu(existing?.startDate ?? ''));
+    _plannedEndDate = TextEditingController(text: formatDateRu(existing?.plannedEndDate ?? ''));
+    _nextPaymentDate = TextEditingController(text: formatDateRu(existing?.nextPaymentDate ?? ''));
+    _lastPaymentDate = TextEditingController(text: formatDateRu(existing?.lastPaymentDate ?? ''));
     _cameraUrl = TextEditingController(text: existing?.cameraUrl ?? '');
     _status = existing?.status ?? 'in_progress';
     _projectType = existing?.projectType.isNotEmpty == true ? existing!.projectType : 'typical';
@@ -80,7 +79,6 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
     _paidAmount.dispose();
     _startDate.dispose();
     _plannedEndDate.dispose();
-    _actualEndDate.dispose();
     _nextPaymentDate.dispose();
     _lastPaymentDate.dispose();
     _cameraUrl.dispose();
@@ -103,12 +101,63 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
     });
   }
 
+  DateTime? _parseDate(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+
+    final ru = RegExp(r'^(\d{2})\.(\d{2})\.(\d{4})$').firstMatch(value);
+    if (ru != null) {
+      final day = int.parse(ru.group(1)!);
+      final month = int.parse(ru.group(2)!);
+      final year = int.parse(ru.group(3)!);
+      return DateTime(year, month, day);
+    }
+
+    final iso = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(value);
+    if (iso != null) {
+      final year = int.parse(iso.group(1)!);
+      final month = int.parse(iso.group(2)!);
+      final day = int.parse(iso.group(3)!);
+      return DateTime(year, month, day);
+    }
+
+    return DateTime.tryParse(value);
+  }
+
+  Future<void> _pickDate(TextEditingController controller) async {
+    final now = DateTime.now();
+    final initial = _parseDate(controller.text) ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000, 1, 1),
+      lastDate: DateTime(2100, 12, 31),
+    );
+    if (picked == null) return;
+    controller.text = formatDateRu(picked.toIso8601String());
+  }
+
+  Widget _dateField({required TextEditingController controller, required String label}) {
+    return TextFormField(
+      controller: controller,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: label,
+        suffixIcon: const Icon(Icons.calendar_month_outlined),
+      ),
+      onTap: () => _pickDate(controller),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final dialogWidth = (MediaQuery.of(context).size.width - 32).clamp(320.0, 640.0);
+
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: Text(widget.existing == null ? 'Создать объект' : 'Редактировать объект'),
       content: SizedBox(
-        width: 640,
+        width: dialogWidth,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -140,18 +189,23 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
                     }
                   },
                 ),
+                const SizedBox(height: 10),
                 TextFormField(
                   controller: _fio,
                   decoration: const InputDecoration(labelText: 'ФИО клиента'),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Введите ФИО' : null,
                 ),
+                const SizedBox(height: 10),
                 TextFormField(controller: _phone, decoration: const InputDecoration(labelText: 'Телефон')),
+                const SizedBox(height: 10),
                 TextFormField(controller: _email, decoration: const InputDecoration(labelText: 'Email')),
+                const SizedBox(height: 10),
                 TextFormField(
                   controller: _address,
                   decoration: const InputDecoration(labelText: 'Адрес объекта'),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Введите адрес' : null,
                 ),
+                const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   value: _status,
                   decoration: const InputDecoration(labelText: 'Статус'),
@@ -160,6 +214,7 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
                       .toList(growable: false),
                   onChanged: (v) => setState(() => _status = v ?? 'in_progress'),
                 ),
+                const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   value: _projectType,
                   decoration: const InputDecoration(labelText: 'Тип объекта'),
@@ -169,15 +224,39 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
                   ],
                   onChanged: (v) => setState(() => _projectType = v ?? 'typical'),
                 ),
-                TextFormField(controller: _areaSqm, decoration: const InputDecoration(labelText: 'Площадь (м²)'), keyboardType: TextInputType.number),
-                TextFormField(controller: _estimatedCost, decoration: const InputDecoration(labelText: 'Сметная стоимость (₽)'), keyboardType: TextInputType.number),
-                TextFormField(controller: _contractAmount, decoration: const InputDecoration(labelText: 'Сумма договора (₽)'), keyboardType: TextInputType.number),
-                TextFormField(controller: _paidAmount, decoration: const InputDecoration(labelText: 'Оплачено (₽)'), keyboardType: TextInputType.number),
-                TextFormField(controller: _startDate, decoration: const InputDecoration(labelText: 'Дата начала (yyyy-mm-dd)')),
-                TextFormField(controller: _plannedEndDate, decoration: const InputDecoration(labelText: 'План сдачи (yyyy-mm-dd)')),
-                TextFormField(controller: _actualEndDate, decoration: const InputDecoration(labelText: 'Фактическая сдача (yyyy-mm-dd)')),
-                TextFormField(controller: _nextPaymentDate, decoration: const InputDecoration(labelText: 'Дата следующего платежа (yyyy-mm-dd)')),
-                TextFormField(controller: _lastPaymentDate, decoration: const InputDecoration(labelText: 'Дата последнего платежа (yyyy-mm-dd)')),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _areaSqm,
+                  decoration: const InputDecoration(labelText: 'Площадь (м²)'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _estimatedCost,
+                  decoration: const InputDecoration(labelText: 'Сметная стоимость (₽)'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _contractAmount,
+                  decoration: const InputDecoration(labelText: 'Сумма договора (₽)'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _paidAmount,
+                  decoration: const InputDecoration(labelText: 'Оплачено (₽)'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 10),
+                _dateField(controller: _startDate, label: 'Дата начала (DD.MM.YYYY)'),
+                const SizedBox(height: 10),
+                _dateField(controller: _plannedEndDate, label: 'План сдачи (DD.MM.YYYY)'),
+                const SizedBox(height: 10),
+                _dateField(controller: _nextPaymentDate, label: 'Дата следующего платежа (DD.MM.YYYY)'),
+                const SizedBox(height: 10),
+                _dateField(controller: _lastPaymentDate, label: 'Дата последнего платежа (DD.MM.YYYY)'),
+                const SizedBox(height: 10),
                 TextFormField(controller: _cameraUrl, decoration: const InputDecoration(labelText: 'URL камеры')),
               ],
             ),
@@ -201,12 +280,12 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
               'estimatedCost': num.tryParse(_estimatedCost.text.trim()) ?? 0,
               'contractAmount': num.tryParse(_contractAmount.text.trim()) ?? 0,
               'paidAmount': num.tryParse(_paidAmount.text.trim()) ?? 0,
-              'nextPaymentDate': _nextPaymentDate.text.trim(),
-              'lastPaymentDate': _lastPaymentDate.text.trim(),
+              'nextPaymentDate': normalizeDateToIso(_nextPaymentDate.text),
+              'lastPaymentDate': normalizeDateToIso(_lastPaymentDate.text),
               'status': _status,
-              'startDate': _startDate.text.trim(),
-              'plannedEndDate': _plannedEndDate.text.trim(),
-              'actualEndDate': _actualEndDate.text.trim(),
+              'startDate': normalizeDateToIso(_startDate.text),
+              'plannedEndDate': normalizeDateToIso(_plannedEndDate.text),
+              'actualEndDate': widget.existing?.actualEndDate ?? '',
               'cameraUrl': _cameraUrl.text.trim(),
               'stages': widget.existing == null
                   ? _buildDefaultStages()
