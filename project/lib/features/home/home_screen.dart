@@ -4,6 +4,7 @@ import '../../models/menu_models.dart';
 import '../../models/project_models.dart';
 import '../../models/session_models.dart';
 import '../../services/auth_service.dart';
+import '../../services/app_update_service.dart';
 import '../../widgets/app_sidebar.dart';
 import '../../widgets/project_card.dart';
 import '../calendar/calendar_page.dart';
@@ -44,6 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
   AppSection _section = AppSection.projects;
   ProjectViewTab _projectTab = ProjectViewTab.all;
+  final AppUpdateService _appUpdate = AppUpdateService();
+  bool _checkingUpdate = false;
 
   bool get _canSeeUsers =>
       widget.session.role == 'admin' || widget.session.role == 'director';
@@ -61,6 +64,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForUpdates(silentIfNoUpdates: true);
+    });
   }
 
   @override
@@ -222,6 +228,62 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _checkForUpdates({required bool silentIfNoUpdates}) async {
+    if (_checkingUpdate) return;
+    setState(() => _checkingUpdate = true);
+    try {
+      final info = await _appUpdate.checkForUpdate();
+      if (!mounted) return;
+
+      if (!info.hasUpdate) {
+        if (!silentIfNoUpdates) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'У вас актуальная версия (${info.currentVersion}). Обновлений нет.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final shouldOpen = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Доступно обновление'),
+              content: Text(
+                'Текущая версия: ${info.currentVersion}\n'
+                'Новая версия: ${info.latestVersion}\n\n'
+                'Открыть страницу скачивания?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Позже'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Обновить'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+
+      if (!shouldOpen || !mounted) return;
+      await widget.auth.openExternal(info.downloadUrl);
+    } catch (e) {
+      if (!mounted || silentIfNoUpdates) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _checkingUpdate = false);
+      }
+    }
+  }
+
   void _selectSection(AppSection section, bool isDesktop) {
     if ((section == AppSection.users || section == AppSection.employees) &&
         !_canSeeUsers) {
@@ -374,6 +436,19 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_title),
         actions: [
+          IconButton(
+            tooltip: 'Проверить обновления',
+            onPressed: _checkingUpdate
+                ? null
+                : () => _checkForUpdates(silentIfNoUpdates: false),
+            icon: _checkingUpdate
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.system_update_alt),
+          ),
           TextButton(
             onPressed: () => widget.onLogout(),
             child: const Text('Выйти'),

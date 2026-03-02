@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_config.dart';
 import '../models/project_models.dart';
@@ -660,5 +661,13 @@ class AuthService {
     }
     if (lower.endsWith('.doc')) return MediaType('application', 'msword');
     return MediaType('application', 'octet-stream');
+  }
+
+  Future<void> openExternal(String url) async {
+    final uri = Uri.parse(url);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      throw Exception('Не удалось открыть ссылку обновления');
+    }
   }
 }
