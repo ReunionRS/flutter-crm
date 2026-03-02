@@ -7,6 +7,7 @@ enum AppSection {
   notifications,
   calendar,
   users,
+  employees,
 }
 
 class MenuItemData {
@@ -60,6 +61,14 @@ const menuItems = <MenuItemData>[
     group: 'Управление',
     label: 'Пользователи',
     icon: Icons.group_outlined,
+    visibleForClient: false,
+    adminOnly: true,
+  ),
+  MenuItemData(
+    section: AppSection.employees,
+    group: 'Управление',
+    label: 'Сотрудники',
+    icon: Icons.badge_outlined,
     visibleForClient: false,
     adminOnly: true,
   ),

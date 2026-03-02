@@ -11,6 +11,7 @@ import '../documents/documents_page.dart';
 import '../notifications/notifications_page.dart';
 import '../support/support_page.dart';
 import '../users/users_page.dart';
+import '../users/employees_page.dart';
 import '../projects/project_details_page.dart';
 import '../projects/project_form_dialog.dart';
 
@@ -42,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String? _error;
   AppSection _section = AppSection.projects;
+  ProjectViewTab _projectTab = ProjectViewTab.all;
 
   bool get _canSeeUsers =>
       widget.session.role == 'admin' || widget.session.role == 'director';
@@ -221,7 +223,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _selectSection(AppSection section, bool isDesktop) {
-    if (section == AppSection.users && !_canSeeUsers) return;
+    if ((section == AppSection.users || section == AppSection.employees) &&
+        !_canSeeUsers) {
+      return;
+    }
     setState(() => _section = section);
 
     // On mobile close drawer after selection.
@@ -238,12 +243,21 @@ class _HomeScreenState extends State<HomeScreen> {
       AppSection.notifications => 'Уведомления',
       AppSection.calendar => 'Календарь',
       AppSection.users => 'Пользователи',
+      AppSection.employees => 'Сотрудники',
     };
   }
 
   Widget _buildProjectsContent() {
-    final query = _searchController.text.trim().toLowerCase();
+    final isClient = widget.session.role == 'client';
+    final query = isClient ? '' : _searchController.text.trim().toLowerCase();
     final filtered = _projects.where((p) {
+      final statusAllowed = switch (_projectTab) {
+        ProjectViewTab.all => true,
+        ProjectViewTab.inProgress => p.status == 'in_progress',
+        ProjectViewTab.completed => p.status == 'completed',
+        ProjectViewTab.onHold => p.status == 'on_hold',
+      };
+      if (!statusAllowed) return false;
       if (query.isEmpty) return true;
       return p.clientFio.toLowerCase().contains(query) ||
           p.constructionAddress.toLowerCase().contains(query);
@@ -254,15 +268,37 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
-              hintText: 'Поиск по ФИО или адресу',
-              prefixIcon: Icon(Icons.search),
+          if (!isClient) ...[
+            TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                hintText: 'Поиск по ФИО или адресу',
+                prefixIcon: Icon(Icons.search),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ],
+          if (!isClient) ...[
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<ProjectViewTab>(
+                segments: const <ButtonSegment<ProjectViewTab>>[
+                  ButtonSegment(value: ProjectViewTab.all, label: Text('Все')),
+                  ButtonSegment(
+                      value: ProjectViewTab.inProgress, label: Text('В работе')),
+                  ButtonSegment(
+                      value: ProjectViewTab.completed, label: Text('Завершён')),
+                  ButtonSegment(
+                      value: ProjectViewTab.onHold, label: Text('Пауза')),
+                ],
+                selected: <ProjectViewTab>{_projectTab},
+                onSelectionChanged: (next) =>
+                    setState(() => _projectTab = next.first),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(24),
@@ -312,6 +348,10 @@ class _HomeScreenState extends State<HomeScreen> {
           role: widget.session.role,
           onUnauthorized: widget.onLogout),
       AppSection.users => UsersPage(
+          auth: widget.auth,
+          role: widget.session.role,
+          onUnauthorized: widget.onLogout),
+      AppSection.employees => EmployeesPage(
           auth: widget.auth,
           role: widget.session.role,
           onUnauthorized: widget.onLogout),
@@ -371,4 +411,11 @@ class _HomeScreenState extends State<HomeScreen> {
               : null,
     );
   }
+}
+
+enum ProjectViewTab {
+  all,
+  inProgress,
+  completed,
+  onHold,
 }

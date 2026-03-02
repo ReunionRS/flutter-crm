@@ -10,6 +10,8 @@ import '../../widgets/meta_row.dart';
 import 'document_viewer_page.dart';
 import 'stage_photo_gallery_page.dart';
 
+enum ObjectDetailsTab { basic, finance, stages }
+
 class ProjectDetailsPage extends StatefulWidget {
   const ProjectDetailsPage({
     super.key,
@@ -35,6 +37,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
   bool _financeEditorOpen = false;
   bool _uploadingProjectDoc = false;
   String? _busyStageId;
+  ObjectDetailsTab _activeTab = ObjectDetailsTab.basic;
 
   final Map<String, TextEditingController> _stageCommentControllers =
       <String, TextEditingController>{};
@@ -677,6 +680,19 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
     final busy = _busyStageId == stage.id;
     final photoUrls =
         stage.photoUrls.map(widget.auth.resolveFileUrl).toList(growable: false);
+    final statusDropdown = DropdownButton<String>(
+      value: stage.status,
+      items: const [
+        DropdownMenuItem(value: 'not_started', child: Text('Не начат')),
+        DropdownMenuItem(value: 'in_progress', child: Text('В работе')),
+        DropdownMenuItem(value: 'completed', child: Text('Завершён')),
+      ],
+      onChanged: busy
+          ? null
+          : (v) {
+              if (v != null) _updateStageStatus(index, v);
+            },
+    );
 
     return Card(
       child: Padding(
@@ -684,17 +700,9 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    stage.name,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
+            LayoutBuilder(builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 760;
+              final actions = <Widget>[
                 if (!_isClient)
                   TextButton(
                     onPressed: busy ? null : () => _editStageDates(index),
@@ -704,25 +712,45 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                   Chip(
                       label: Text(
                           kStageStatusLabels[stage.status] ?? stage.status)),
-                if (!_isClient)
-                  DropdownButton<String>(
-                    value: stage.status,
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'not_started', child: Text('Не начат')),
-                      DropdownMenuItem(
-                          value: 'in_progress', child: Text('В работе')),
-                      DropdownMenuItem(
-                          value: 'completed', child: Text('Завершён')),
-                    ],
-                    onChanged: busy
-                        ? null
-                        : (v) {
-                            if (v != null) _updateStageStatus(index, v);
-                          },
+                if (!_isClient) statusDropdown,
+              ];
+
+              if (!isNarrow) {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        stage.name,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    ...actions,
+                  ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    stage.name,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
-              ],
-            ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: actions,
+                  ),
+                ],
+              );
+            }),
             Text(
               'План: ${formatDateRu(stage.plannedStart)} — ${formatDateRu(stage.plannedEnd)}',
               style: Theme.of(context).textTheme.bodyMedium,
@@ -744,7 +772,11 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                         .map(
                           (line) => Padding(
                             padding: const EdgeInsets.only(bottom: 2),
-                            child: Text('• $line'),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child:
+                                  Text('• $line', textAlign: TextAlign.left),
+                            ),
                           ),
                         )
                         .toList(growable: false),
@@ -884,6 +916,175 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
     );
   }
 
+  Widget _buildBasicTab(ProjectDetails details, ProjectDocument? projectDoc) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                details.clientFio,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (_canEditObjectCard)
+              TextButton(
+                onPressed: _editObjectCard,
+                child: const Text('Редактировать карточку'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        MetaRow(label: 'Адрес', value: details.constructionAddress),
+        MetaRow(
+            label: 'Телефон',
+            value: details.clientPhone.isEmpty ? '—' : details.clientPhone),
+        MetaRow(
+            label: 'Email',
+            value: details.clientEmail.isEmpty ? '—' : details.clientEmail),
+        MetaRow(
+            label: 'Тип',
+            value: details.projectType.isEmpty ? '—' : details.projectType),
+        MetaRow(
+            label: 'Статус',
+            value: kProjectStatusLabels[details.status] ?? details.status),
+        MetaRow(label: 'Площадь', value: '${details.areaSqm} м²'),
+        MetaRow(label: 'Дата начала', value: formatDateRu(details.startDate)),
+        MetaRow(label: 'План сдачи', value: formatDateRu(details.plannedEndDate)),
+        MetaRow(label: 'Сметная стоимость', value: '${details.estimatedCost} ₽'),
+        const SizedBox(height: 8),
+        MetaRow(label: 'Готовность', value: '${details.progress}%'),
+        if (details.cameraUrl.isNotEmpty)
+          MetaRow(label: 'Камера', value: details.cameraUrl),
+        const SizedBox(height: 14),
+        _buildProjectDocCard(projectDoc),
+      ],
+    );
+  }
+
+  Widget _buildFinanceTab(ProjectDetails details) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Финансы', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        MetaRow(label: 'Сумма договора', value: '${details.contractAmount} ₽'),
+        MetaRow(label: 'Оплачено', value: '${details.paidAmount} ₽'),
+        MetaRow(label: 'Задолженность', value: '${details.debt} ₽'),
+        MetaRow(
+            label: 'Дата следующего платежа',
+            value: formatDateRu(details.nextPaymentDate)),
+        MetaRow(
+            label: 'Дата последнего платежа',
+            value: formatDateRu(details.lastPaymentDate)),
+        if (_canEditFinance) ...[
+          const SizedBox(height: 10),
+          OutlinedButton(
+            onPressed: () =>
+                setState(() => _financeEditorOpen = !_financeEditorOpen),
+            child: Text(
+                _financeEditorOpen ? 'Скрыть редактирование' : 'Редактировать финансы'),
+          ),
+          if (_financeEditorOpen) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _contractAmountController,
+              decoration: const InputDecoration(labelText: 'Сумма договора (₽)'),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _paidAmountController,
+              decoration: const InputDecoration(labelText: 'Оплачено (₽)'),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 8),
+            _dateField(
+              controller: _nextPaymentDateController,
+              label: 'Дата следующего платежа (DD.MM.YYYY)',
+            ),
+            const SizedBox(height: 8),
+            _dateField(
+              controller: _lastPaymentDateController,
+              label: 'Дата последнего платежа (DD.MM.YYYY)',
+            ),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: _saveFinance,
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE0B300)),
+              child: const Text('Сохранить финансы'),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStagesTab(ProjectDetails details) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Этапы строительства', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        if (details.stages.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Этапы пока не добавлены'),
+            ),
+          ),
+        for (int i = 0; i < details.stages.length; i++) _buildStageCard(details.stages[i], i),
+      ],
+    );
+  }
+
+  Widget _buildObjectTabContent(ProjectDetails details, ProjectDocument? projectDoc) {
+    switch (_activeTab) {
+      case ObjectDetailsTab.basic:
+        return _buildBasicTab(details, projectDoc);
+      case ObjectDetailsTab.finance:
+        return _buildFinanceTab(details);
+      case ObjectDetailsTab.stages:
+        return _buildStagesTab(details);
+    }
+  }
+
+  Widget _buildObjectTabsBlock() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('Основное'),
+              selected: _activeTab == ObjectDetailsTab.basic,
+              onSelected: (_) =>
+                  setState(() => _activeTab = ObjectDetailsTab.basic),
+            ),
+            ChoiceChip(
+              label: const Text('Финансы'),
+              selected: _activeTab == ObjectDetailsTab.finance,
+              onSelected: (_) =>
+                  setState(() => _activeTab = ObjectDetailsTab.finance),
+            ),
+            ChoiceChip(
+              label: const Text('Этапы'),
+              selected: _activeTab == ObjectDetailsTab.stages,
+              onSelected: (_) =>
+                  setState(() => _activeTab = ObjectDetailsTab.stages),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final details = _details;
@@ -902,83 +1103,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                       child: ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          details.clientFio,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge
-                                              ?.copyWith(
-                                                  fontWeight: FontWeight.w700),
-                                        ),
-                                      ),
-                                      if (_canEditObjectCard)
-                                        TextButton(
-                                          onPressed: _editObjectCard,
-                                          child: const Text(
-                                              'Редактировать карточку'),
-                                        ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  MetaRow(
-                                      label: 'Адрес',
-                                      value: details.constructionAddress),
-                                  MetaRow(
-                                      label: 'Телефон',
-                                      value: details.clientPhone.isEmpty
-                                          ? '—'
-                                          : details.clientPhone),
-                                  MetaRow(
-                                      label: 'Email',
-                                      value: details.clientEmail.isEmpty
-                                          ? '—'
-                                          : details.clientEmail),
-                                  MetaRow(
-                                      label: 'Тип',
-                                      value: details.projectType.isEmpty
-                                          ? '—'
-                                          : details.projectType),
-                                  MetaRow(
-                                      label: 'Статус',
-                                      value: kProjectStatusLabels[
-                                              details.status] ??
-                                          details.status),
-                                  MetaRow(
-                                      label: 'Площадь',
-                                      value: '${details.areaSqm} м²'),
-                                  MetaRow(
-                                      label: 'Дата начала',
-                                      value: formatDateRu(details.startDate)),
-                                  MetaRow(
-                                      label: 'План сдачи',
-                                      value:
-                                          formatDateRu(details.plannedEndDate)),
-                                  MetaRow(
-                                      label: 'Сметная стоимость',
-                                      value: '${details.estimatedCost} ₽'),
-                                  const SizedBox(height: 8),
-                                  MetaRow(
-                                      label: 'Готовность',
-                                      value: '${details.progress}%'),
-                                  if (details.cameraUrl.isNotEmpty)
-                                    MetaRow(
-                                        label: 'Камера',
-                                        value: details.cameraUrl),
-                                  const SizedBox(height: 14),
-                                  _buildProjectDocCard(projectDoc),
-                                ],
-                              ),
-                            ),
-                          ),
+                          _buildObjectTabsBlock(),
                           const SizedBox(height: 10),
                           Card(
                             child: Padding(
@@ -986,92 +1111,17 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Финансы',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge),
-                                  const SizedBox(height: 8),
-                                  MetaRow(
-                                      label: 'Сумма договора',
-                                      value: '${details.contractAmount} ₽'),
-                                  MetaRow(
-                                      label: 'Оплачено',
-                                      value: '${details.paidAmount} ₽'),
-                                  MetaRow(
-                                      label: 'Задолженность',
-                                      value: '${details.debt} ₽'),
-                                  MetaRow(
-                                      label: 'Дата следующего платежа',
-                                      value: formatDateRu(
-                                          details.nextPaymentDate)),
-                                  MetaRow(
-                                      label: 'Дата последнего платежа',
-                                      value: formatDateRu(
-                                          details.lastPaymentDate)),
-                                  if (_canEditFinance) ...[
-                                    const SizedBox(height: 10),
-                                    OutlinedButton(
-                                      onPressed: () => setState(() =>
-                                          _financeEditorOpen =
-                                              !_financeEditorOpen),
-                                      child: Text(_financeEditorOpen
-                                          ? 'Скрыть редактирование'
-                                          : 'Редактировать финансы'),
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 220),
+                                    child: KeyedSubtree(
+                                      key: ValueKey<ObjectDetailsTab>(_activeTab),
+                                      child: _buildObjectTabContent(details, projectDoc),
                                     ),
-                                    if (_financeEditorOpen) ...[
-                                      const SizedBox(height: 8),
-                                      TextField(
-                                        controller: _contractAmountController,
-                                        decoration: const InputDecoration(
-                                            labelText: 'Сумма договора (₽)'),
-                                        keyboardType: TextInputType.number,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      TextField(
-                                        controller: _paidAmountController,
-                                        decoration: const InputDecoration(
-                                            labelText: 'Оплачено (₽)'),
-                                        keyboardType: TextInputType.number,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      _dateField(
-                                        controller: _nextPaymentDateController,
-                                        label:
-                                            'Дата следующего платежа (DD.MM.YYYY)',
-                                      ),
-                                      const SizedBox(height: 8),
-                                      _dateField(
-                                        controller: _lastPaymentDateController,
-                                        label:
-                                            'Дата последнего платежа (DD.MM.YYYY)',
-                                      ),
-                                      const SizedBox(height: 10),
-                                      FilledButton(
-                                        onPressed: _saveFinance,
-                                        style: FilledButton.styleFrom(
-                                            backgroundColor:
-                                                const Color(0xFFE0B300)),
-                                        child: const Text('Сохранить финансы'),
-                                      ),
-                                    ],
-                                  ],
+                                  ),
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 10),
-                          Text('Этапы строительства',
-                              style: Theme.of(context).textTheme.titleLarge),
-                          const SizedBox(height: 8),
-                          if (details.stages.isEmpty)
-                            const Card(
-                              child: Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Text('Этапы пока не добавлены'),
-                              ),
-                            ),
-                          for (int i = 0; i < details.stages.length; i++)
-                            _buildStageCard(details.stages[i], i),
                         ],
                       ),
                     ),

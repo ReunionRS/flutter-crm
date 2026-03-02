@@ -44,6 +44,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
   String? _error;
 
   String _docType = _docTypes.first;
+  String _selectedDocTab = 'all';
   String? _selectedClientId;
 
   bool get _isClient => widget.role == 'client';
@@ -259,37 +260,28 @@ class _DocumentsPageState extends State<DocumentsPage> {
         break;
       }
     }
+    final visibleDocs = _selectedDocTab == 'all'
+        ? _docs
+        : _docs.where((d) => d.type == _selectedDocTab).toList(growable: false);
 
     return RefreshIndicator(
       onRefresh: _loadInitial,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Документооборот',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 12),
-                  if (_isClient)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border:
-                            Border.all(color: Theme.of(context).dividerColor),
-                      ),
-                      child: const Text('Ваши документы'),
-                    )
-                  else
+          if (!_isClient) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('Документооборот',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: _selectedClientId,
                       decoration: const InputDecoration(labelText: 'Клиент'),
@@ -302,7 +294,6 @@ class _DocumentsPageState extends State<DocumentsPage> {
                         await _loadDocs();
                       },
                     ),
-                  if (_canUpload) ...[
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: _docType,
@@ -350,17 +341,12 @@ class _DocumentsPageState extends State<DocumentsPage> {
                             _uploading ? 'Загрузка...' : 'Сохранить документы'),
                       ),
                     ),
-                  ] else ...[
-                    const SizedBox(height: 10),
-                    Text(
-                        'Клиенты могут только просматривать и скачивать документы.',
-                        style: Theme.of(context).textTheme.bodyMedium),
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 10),
+          ],
           Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -377,6 +363,32 @@ class _DocumentsPageState extends State<DocumentsPage> {
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Все'),
+                          selected: _selectedDocTab == 'all',
+                          onSelected: (_) =>
+                              setState(() => _selectedDocTab = 'all'),
+                        ),
+                        const SizedBox(width: 8),
+                        ..._docTypes.map(
+                          (type) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(type),
+                              selected: _selectedDocTab == type,
+                              onSelected: (_) =>
+                                  setState(() => _selectedDocTab = type),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   if (_loading)
                     const Padding(
                       padding: EdgeInsets.all(24),
@@ -385,10 +397,10 @@ class _DocumentsPageState extends State<DocumentsPage> {
                   else if (_error != null)
                     Text(_error!,
                         style: const TextStyle(color: Colors.redAccent))
-                  else if (_docs.isEmpty)
+                  else if (visibleDocs.isEmpty)
                     const Text('Пока нет документов.')
                   else
-                    ..._docs.map((doc) {
+                    ...visibleDocs.map((doc) {
                       return Container(
                         width: double.infinity,
                         margin: const EdgeInsets.only(bottom: 10),

@@ -1,6 +1,6 @@
 {
-    "name": "Март Строй",
-    "short_name": "Март Строй",
+    "name": "МартСтрой",
+    "short_name": "МартСтрой",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0E0F13",

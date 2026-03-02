@@ -526,6 +526,34 @@ class AuthService {
     }
   }
 
+  Future<AppUser> updateUserState(
+    String userId, {
+    bool? isActive,
+    bool? isArchived,
+  }) async {
+    final headers = await _authHeaders();
+    final payload = <String, dynamic>{};
+    if (isActive != null) payload['isActive'] = isActive;
+    if (isArchived != null) payload['isArchived'] = isArchived;
+    if (payload.isEmpty) {
+      throw Exception('Не переданы изменения состояния');
+    }
+
+    final response = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/api/users/$userId/state'),
+      headers: headers,
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 401) throw const UnauthorizedException();
+    if (response.statusCode != 200) {
+      throw Exception(_extractError(response.body,
+          fallback: 'Не удалось обновить состояние сотрудника'));
+    }
+
+    return AppUser.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   Future<List<SupportMessage>> fetchSupportMessages(
       {String? clientUserId}) async {
     final headers = await _authHeaders();
